@@ -1,0 +1,138 @@
+package generated;
+
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
+import com.crawljax.browser.EmbeddedBrowser.BrowserType;
+import com.crawljax.core.configuration.BrowserConfiguration;
+import com.crawljax.core.configuration.CrawljaxConfiguration;
+import com.crawljax.core.configuration.CrawljaxConfiguration.CrawljaxConfigurationBuilder;
+import com.crawljax.forms.FormInput;
+import com.crawljax.plugins.testcasegenerator.TestSuiteHelper;
+
+/*
+ * Generated @ ${date}
+ */
+
+public class ${classname} {
+
+    private static final String URL = "${url}";
+	private static TestSuiteHelper testSuiteHelper;
+	
+	private static final String TEST_SUITE_PATH = "${testSuitePath}";
+	
+	private static CrawljaxConfiguration getTestConfiguration() {
+		CrawljaxConfigurationBuilder builder = CrawljaxConfiguration.builderFor(URL);
+		builder.crawlRules().waitAfterEvent(${waitAfterEvent}, TimeUnit.MILLISECONDS);
+		builder.crawlRules().waitAfterReloadUrl(${waitAfterReloadUrl}, TimeUnit.MILLISECONDS);
+		builder.setBrowserConfig(new BrowserConfiguration(BrowserType.PHANTOMJS));
+		return builder.build();
+	}	
+	
+	@BeforeClass
+	public static void oneTimeSetUp(){
+		try {
+#if(${database})
+			//use database for data
+			testSuiteHelper = new TestSuiteHelper(
+					getTestConfiguration(), TEST_SUITE_PATH);
+#else
+			//load needed data from json files
+			testSuiteHelper = new TestSuiteHelper(
+					getTestConfiguration(),
+					"${jsonstates}",
+					"${jsoneventables}",
+					"${crawlScreenshots}",
+					"${diffScreenshots}",
+					URL, TEST_SUITE_PATH);
+#end
+		}
+		catch (Exception e) {
+			fail(e.getMessage());
+		}
+	}
+	
+	@AfterClass
+	public static void oneTimeTearDown(){
+		try {
+			testSuiteHelper.tearDown();
+		}catch (Exception e) {
+			fail(e.getMessage());
+		}
+	}
+
+	@Before
+	public void setUp(){
+		try {
+			testSuiteHelper.goToInitialUrl();		
+		}catch (Exception e) {
+			fail(e.getMessage());
+		}
+	}	
+	
+	/*
+	 * Test Cases
+	 */
+	 
+#foreach( $method in $methodList )
+	@Test
+	public void method_${method.methodName}(){
+		testSuiteHelper.newCurrentTestMethod("method_${method.methodName}");
+		List<FormInput> formInputs;
+#if(${method.methodName} != "0")
+		testSuiteHelper.compareCurrentDomWithState(0);
+#end
+		boolean allStatesIdentical = true;
+		try {
+#foreach( $event in $method.eventList )
+#if(${event.properties.how} == "index")
+			//initial state
+#else
+			/* ${event.properties.info} */
+#if($event.formInputs.size() > 0)
+			formInputs = new ArrayList<FormInput>();
+#foreach( $input in $event.formInputs )
+			formInputs.add(new FormInput(FormInput.InputType.${input.type}, new Identification(How.${input.how}, "${input.name}"), "${input.value}"));
+#end			
+			testSuiteHelper.handleFormInputs(formInputs);
+			Thread.sleep(100);
+#end
+			assertTrue("Event fired: ${event.properties.text}", testSuiteHelper.fireEvent(${event.properties.id}));
+#end
+			testSuiteHelper.runInCrawlingPlugins(${event.properties.targetid});
+			assertTrue("Invariants satisfied in state: ${event.properties.targetid}" , testSuiteHelper.checkInvariants());
+
+			/* Compare the DOM of the two states (disabled in favour of visual diff). */
+			//allStatesIdentical = testSuiteHelper.compareCurrentDomWithState(${event.properties.targetid})
+			//						&& allStatesIdentical;
+			
+			allStatesIdentical = testSuiteHelper.diffCurrentDomWithState(${event.properties.targetid}).statesAreIdentical()
+				&& allStatesIdentical;
+			
+			/* Perform a visual diff on the two states. */
+			allStatesIdentical = testSuiteHelper.compareCurrentScreenshotWithState(${event.properties.targetid})
+					&& allStatesIdentical;
+			
+#end
+		} catch (Exception e) {
+			fail(e.getMessage());
+		}
+		if(allStatesIdentical) {
+			testSuiteHelper.markLastMethodAsSucceeded();
+		} else {
+			testSuiteHelper.markLastMethodAsFailed();
+			fail("At least one state is different.");
+		}
+	}
+
+#end
+
+}	 
